@@ -33,8 +33,10 @@ const uint LED_3_OLED = 22;
 
 SemaphoreHandle_t xSemaphore = NULL;
 SemaphoreHandle_t xSemaphoreTimeDiff = NULL;
-
 volatile uint32_t time_start, time_end;
+
+uint32_t time_diff; // Declarar time_diff como uma variável global
+
 volatile bool alarm_fired = false;
 
 int64_t alarm_callback(alarm_id_t id, void *user_data) {
@@ -93,7 +95,6 @@ void trigger_task(void *pvParameters) {
 }
 
 void echo_task(void *pvParameters) {
-    uint32_t *time_diff_ptr = (uint32_t *)pvParameters;
     while (1) {
         // Aguarda o início do eco
         while (gpio_get(ECHO_PIN) == 0) {
@@ -112,13 +113,12 @@ void echo_task(void *pvParameters) {
         time_end = time_us_32();
 
         // Calcula a distância com base no tempo do eco
-        *time_diff_ptr = time_end - time_start;
+        time_diff = time_end - time_start;
         xSemaphoreGive(xSemaphoreTimeDiff);
     }
 }
 
 void oled_task(void *pvParameters) {
-    uint32_t *time_diff_ptr = (uint32_t *)pvParameters;
     printf("Inicializando Driver\n");
     ssd1306_init();
 
@@ -144,7 +144,6 @@ void oled_task(void *pvParameters) {
     while (1) {
         char str[20], time_str[20], progress_str[34];
         xSemaphoreTake(xSemaphoreTimeDiff, portMAX_DELAY);
-        uint32_t time_diff = *time_diff_ptr;
         if (time_diff == -1) {
             strcpy(str, "Distancia: ERRO");
         } else {
@@ -184,11 +183,9 @@ int main() {
     xSemaphore = xSemaphoreCreateBinary();
     xSemaphoreTimeDiff = xSemaphoreCreateBinary();
 
-    uint32_t time_diff = 0;
-
     xTaskCreate(trigger_task, "Trigger", 8190, NULL, 1, NULL);
-    xTaskCreate(echo_task, "Echo", 8190, &time_diff, 1, NULL); // Passar o endereço de time_diff
-    xTaskCreate(oled_task, "OLED", 8190, &time_diff, 1, NULL); // Passar o endereço de time_diff
+    xTaskCreate(echo_task, "Echo", 8190, NULL, 1, NULL);
+    xTaskCreate(oled_task, "OLED", 8190, NULL, 1, NULL);
 
     vTaskStartScheduler();
     printf("Error al iniciar el scheduler\n");
