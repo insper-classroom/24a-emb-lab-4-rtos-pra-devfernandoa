@@ -187,8 +187,8 @@ int main() {
     uint32_t time_diff = 0;
 
     xTaskCreate(trigger_task, "Trigger", 8190, NULL, 1, NULL);
-    xTaskCreate(echo_task, "Echo", 8190, NULL, 1, NULL);
-    xTaskCreate(oled_task, "OLED", 8190, NULL, 1, NULL);
+    xTaskCreate(echo_task, "Echo", 8190, &time_diff, 1, NULL); // Passar o endereço de time_diff
+    xTaskCreate(oled_task, "OLED", 8190, &time_diff, 1, NULL); // Passar o endereço de time_diff
 
     vTaskStartScheduler();
     printf("Error al iniciar el scheduler\n");
