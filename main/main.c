@@ -36,14 +36,6 @@ SemaphoreHandle_t xSemaphoreTimeDiff = NULL;
 
 QueueHandle_t xQueue;
 
-volatile bool alarm_fired = false;
-
-int64_t alarm_callback(alarm_id_t id, void *user_data) {
-    alarm_fired = true;
-
-    return 0;
-}
-
 void oled1_btn_led_init(void) {
     gpio_init(LED_1_OLED);
     gpio_set_dir(LED_1_OLED, GPIO_OUT);
@@ -84,10 +76,6 @@ void trigger_task(void *pvParameters) {
         gpio_put(TRIG_PIN, 1);
         sleep_us(10);
         gpio_put(TRIG_PIN, 0);
-
-        // Define um alarme para daqui a 300 milissegundos
-        alarm_fired = false;
-        add_alarm_in_ms(300, alarm_callback, NULL, false);
 
         vTaskDelay(pdMS_TO_TICKS(60));
     }
