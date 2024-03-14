@@ -117,18 +117,18 @@ void oled_task(void *pvParameters) {
     rtc_set_datetime(&t);
 
     while (1) {
-        char str[20], time_str[20], progress_str[34];
+        char str_distance[20], time_str[20], progress_str[34];
         uint32_t time_diff;
         xQueueReceive(xQueue, &time_diff, portMAX_DELAY);
         if (time_diff == -1) {
-            strcpy(str, "Distancia: ERRO");
+            strcpy(str_distance, "Distancia: ERRO");
         } else {
             int distance = time_diff / 58;
-            sprintf(str, "Distancia: %d cm", distance);
+            sprintf(str_distance, "Distancia: %d cm", distance);
 
             // Cria a barra de progresso
             int progress = (distance > 30) ? 30 : distance;
-            memset(progress_str, '#', progress);
+            memset(progress_str, '-', progress);
             progress_str[progress] = '\0';
         }
 
@@ -137,10 +137,10 @@ void oled_task(void *pvParameters) {
         sprintf(time_str, "%02d:%02d:%02d", t.hour, t.min, t.sec);
 
         gfx_clear_buffer(&disp);
-        gfx_draw_string(&disp, 0, 0, 1, str);
+        gfx_draw_string(&disp, 0, 0, 1, str_distance);
         gfx_draw_string(&disp, 0, 10, 1, time_str);
         gfx_draw_string(&disp, 0, 20, 1, progress_str);
-        printf("%s\n", str);
+        printf("%s\n", str_distance);
         printf("%s\n", time_str);
         printf("%s\n", progress_str);
         vTaskDelay(pdMS_TO_TICKS(1000));
