@@ -33,7 +33,6 @@ const uint LED_3_OLED = 22;
 
 SemaphoreHandle_t xSemaphore = NULL;
 SemaphoreHandle_t xSemaphoreTimeDiff = NULL;
-volatile uint32_t time_start, time_end;
 
 QueueHandle_t xQueue;
 
@@ -69,10 +68,14 @@ void oled1_btn_led_init(void) {
 }
 
 void pin_callback(uint gpio, uint32_t events) {
-    if (events & GPIO_IRQ_EDGE_RISE) {
+    static uint32_t time_start, time_end;
+    if (events == GPIO_IRQ_EDGE_RISE) {
         time_start = time_us_32();
-    } else if (events & GPIO_IRQ_EDGE_FALL) {
+    } else if (events == GPIO_IRQ_EDGE_FALL) {
         time_end = time_us_32();
+        uint32_t time_diff = time_end - time_start;
+        xQueueReset(xQueue);
+        xQueueSendFromISR(xQueue, &time_diff, NULL);
     }
 }
 
@@ -87,25 +90,6 @@ void trigger_task(void *pvParameters) {
         add_alarm_in_ms(300, alarm_callback, NULL, false);
 
         vTaskDelay(pdMS_TO_TICKS(60));
-    }
-}
-
-void echo_task(void *pvParameters) {
-    while (1) {
-        // Aguarda o início do eco
-        while (gpio_get(ECHO_PIN) == 0) {
-            if (alarm_fired) {
-                uint32_t time_diff = time_end - time_start;
-            }
-        }
-
-        while (gpio_get(ECHO_PIN) == 1) {
-            if (alarm_fired) {
-                uint32_t time_diff = time_end - time_start;
-            }
-        }
-
-        // Calcula a distância com base no tempo do ec
     }
 }
 
@@ -134,7 +118,8 @@ void oled_task(void *pvParameters) {
 
     while (1) {
         char str[20], time_str[20], progress_str[34];
-        uint32_t time_diff = time_end - time_start;
+        uint32_t time_diff;
+        xQueueReceive(xQueue, &time_diff, portMAX_DELAY);
         if (time_diff == -1) {
             strcpy(str, "Distancia: ERRO");
         } else {
@@ -160,6 +145,7 @@ void oled_task(void *pvParameters) {
         printf("%s\n", progress_str);
         vTaskDelay(pdMS_TO_TICKS(1000));
         gfx_show(&disp);
+        xQueueReset(xQueue);
     }
 }
 
@@ -172,9 +158,9 @@ int main() {
     gpio_set_irq_enabled_with_callback(ECHO_PIN, GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL, true, &pin_callback);
 
     xSemaphore = xSemaphoreCreateBinary();
+    xQueue = xQueueCreate(1, sizeof(uint32_t));
 
     xTaskCreate(trigger_task, "Trigger", 8190, NULL, 1, NULL);
-    xTaskCreate(echo_task, "Echo", 8190, NULL, 1, NULL);
     xTaskCreate(oled_task, "OLED", 8190, NULL, 1, NULL);
 
     vTaskStartScheduler();
