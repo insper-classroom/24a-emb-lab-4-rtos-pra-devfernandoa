@@ -35,7 +35,7 @@ SemaphoreHandle_t xSemaphore = NULL;
 SemaphoreHandle_t xSemaphoreTimeDiff = NULL;
 volatile uint32_t time_start, time_end;
 
-uint32_t time_diff; // Declarar time_diff como uma variável global
+QueueHandle_t xQueue;
 
 volatile bool alarm_fired = false;
 
@@ -69,15 +69,11 @@ void oled1_btn_led_init(void) {
 }
 
 void pin_callback(uint gpio, uint32_t events) {
-    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-    uint32_t time = to_us_since_boot(get_absolute_time());
-    if (gpio_get(ECHO_PIN)) {
-        time_start = time;
-    } else {
-        time_end = time;
-        xSemaphoreGiveFromISR(xSemaphore, &xHigherPriorityTaskWoken);
+    if (events & GPIO_IRQ_EDGE_RISE) {
+        time_start = time_us_32();
+    } else if (events & GPIO_IRQ_EDGE_FALL) {
+        time_end = time_us_32();
     }
-    portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
 }
 
 void trigger_task(void *pvParameters) {
@@ -99,22 +95,17 @@ void echo_task(void *pvParameters) {
         // Aguarda o início do eco
         while (gpio_get(ECHO_PIN) == 0) {
             if (alarm_fired) {
-                xSemaphoreGive(xSemaphoreTimeDiff);
+                uint32_t time_diff = time_end - time_start;
             }
         }
-        time_start = time_us_32(); // Atualiza o tempo de início quando o eco começa
 
         while (gpio_get(ECHO_PIN) == 1) {
             if (alarm_fired) {
-                xSemaphoreGive(xSemaphoreTimeDiff);
+                uint32_t time_diff = time_end - time_start;
             }
         }
 
-        time_end = time_us_32();
-
-        // Calcula a distância com base no tempo do eco
-        time_diff = time_end - time_start;
-        xSemaphoreGive(xSemaphoreTimeDiff);
+        // Calcula a distância com base no tempo do ec
     }
 }
 
@@ -143,7 +134,7 @@ void oled_task(void *pvParameters) {
 
     while (1) {
         char str[20], time_str[20], progress_str[34];
-        xSemaphoreTake(xSemaphoreTimeDiff, portMAX_DELAY);
+        uint32_t time_diff = time_end - time_start;
         if (time_diff == -1) {
             strcpy(str, "Distancia: ERRO");
         } else {
@@ -181,7 +172,6 @@ int main() {
     gpio_set_irq_enabled_with_callback(ECHO_PIN, GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL, true, &pin_callback);
 
     xSemaphore = xSemaphoreCreateBinary();
-    xSemaphoreTimeDiff = xSemaphoreCreateBinary();
 
     xTaskCreate(trigger_task, "Trigger", 8190, NULL, 1, NULL);
     xTaskCreate(echo_task, "Echo", 8190, NULL, 1, NULL);
