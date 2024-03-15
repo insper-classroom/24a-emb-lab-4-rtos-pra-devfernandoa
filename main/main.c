@@ -60,14 +60,21 @@ void oled1_btn_led_init(void) {
 }
 
 void pin_callback(uint gpio, uint32_t events) {
+    xQueueSendFromISR(xQueue, &events, NULL);
+}
+
+void queue_task(void *pvParameters) {
     static uint32_t time_start, time_end;
-    if (events == GPIO_IRQ_EDGE_RISE) {
-        time_start = time_us_32();
-    } else if (events == GPIO_IRQ_EDGE_FALL) {
-        time_end = time_us_32();
-        uint32_t time_diff = time_end - time_start;
-        xQueueReset(xQueue);
-        xQueueSendFromISR(xQueue, &time_diff, NULL);
+    uint32_t events;
+    while (1) {
+        xQueueReceive(xQueue, &events, portMAX_DELAY);
+        if (events == GPIO_IRQ_EDGE_RISE) {
+            time_start = time_us_32();
+        } else if (events == GPIO_IRQ_EDGE_FALL) {
+            time_end = time_us_32();
+            uint32_t time_diff = time_end - time_start;
+            xQueueSend(xQueue, &time_diff, portMAX_DELAY);
+        }
     }
 }
 
@@ -107,17 +114,22 @@ void oled_task(void *pvParameters) {
     while (1) {
         char str_distance[20], time_str[20], progress_str[34];
         uint32_t time_diff;
-        xQueueReceive(xQueue, &time_diff, portMAX_DELAY);
-        if (time_diff == -1) {
-            strcpy(str_distance, "Distancia: ERRO");
-        } else {
-            int distance = time_diff / 58;
-            sprintf(str_distance, "Distancia: %d cm", distance);
 
-            // Cria a barra de progresso
-            int progress = (distance > 30) ? 30 : distance;
-            memset(progress_str, '-', progress);
-            progress_str[progress] = '\0';
+        if (xQueuePeek(xQueue, &time_diff, 0) == pdFALSE) {
+            strcpy(str_distance, "Nenhum dado recebido");
+        } else {
+            xQueueReceive(xQueue, &time_diff, portMAX_DELAY);
+            if (time_diff / 58 == 0 || time_diff / 58 > 500) {
+                strcpy(str_distance, "Distancia: ERRO");
+            } else {
+                int distance = time_diff / 58;
+                sprintf(str_distance, "Distancia: %d cm", distance);
+
+                // Cria a barra de progresso
+                int progress = (distance > 30) ? 30 : distance;
+                memset(progress_str, '-', progress);
+                progress_str[progress] = '\0';
+            }
         }
 
         // Obtém a hora atual do RTC
@@ -149,6 +161,7 @@ int main() {
     xQueue = xQueueCreate(1, sizeof(uint32_t));
 
     xTaskCreate(trigger_task, "Trigger", 8190, NULL, 1, NULL);
+    xTaskCreate(queue_task, "Queue", 8190, NULL, 1, NULL);
     xTaskCreate(oled_task, "OLED", 8190, NULL, 1, NULL);
 
     vTaskStartScheduler();
