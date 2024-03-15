@@ -116,7 +116,7 @@ void oled_task(void *pvParameters) {
         uint32_t time_diff;
 
         if (xQueuePeek(xQueue, &time_diff, 0) == pdFALSE) {
-            strcpy(str_distance, "Nenhum dado recebido");
+            strcpy(str_distance, "Nenhum dado");
         } else {
             xQueueReceive(xQueue, &time_diff, portMAX_DELAY);
             if (time_diff / 58 == 0 || time_diff / 58 > 500) {
